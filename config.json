@@ -1,0 +1,16 @@
+{
+"cron":{
+  "create cron": false,
+  "cron-time": "* * * * *"
+},
+  
+
+"clouflare":{
+  "zone_id": "",
+  "record_id": "",
+  "record_name": "",
+  "user_email": "",
+  "api_key": "",
+  "record_type": ""
+}
+}
