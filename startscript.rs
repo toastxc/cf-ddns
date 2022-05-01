@@ -19,19 +19,18 @@ fn main() {
         user_email: String, 
         api_key: String,
         record_type: char, 
-        
     }
 
     // user input
 
-    println!("create cron? (true/false)");
+    println!("create cron (true/false)");
     let mut cf_create_cron = String::new();
     io::stdin().read_line(&mut cf_create_cron)
         .ok()
         .expect("invalid input for 'create_cron',expected: bool");
     let cf_create_cron = cf_create_cron.trim().parse::<bool>().unwrap();
 
-    println!("enter cron time (* * * * *)");
+    println!("enter cron time (* * * * *)\nleave blank if none");
     let mut cf_cron_time = String::new();
     io::stdin().read_line(&mut cf_cron_time)
         .ok()
@@ -93,8 +92,6 @@ fn main() {
         user_email: cf_user_email,
         api_key: cf_api_key,
         record_type: cf_record_type,
-
-    
     };
 
     //println!("{:#?}", cloudflare_json1);
@@ -102,28 +99,26 @@ fn main() {
     let cf_json = serde_json::to_string_pretty(&cloudflare_json1).unwrap();
     //println!("{:#?}", cf_json);
 
-
     let _jsoncreate = Command::new("touch")
-        .arg("conf.json")
+        .arg("/home/cloudflare_api/conf.json")
         .spawn()
         .expect("NO WIMDOES ONLY GNU/LINUX");
 
-    fs::write("conf.json", cf_json)
+    fs::write("/home/cloudflare_api/conf.json", cf_json)
         .expect("Unable to write file");
 
-    let crontab = fs::read_to_string("/etc/crontab")
-        .expect("failed to read file");
-    //println!("{}", crontab);
 
+    if cloudflare_json1.create_cron == true {
+        
+        let crontab = fs::read_to_string("/etc/crontab")
+            .expect("failed to read file");
+        //println!("{}", crontab);
 
- 
-    
-    let crontab = crontab + &cloudflare_json1.cron_time + "    root   /home/cloudflare_api/api";
+        let crontab = crontab + &cloudflare_json1.cron_time + "    root   /home/cloudflare_api/api";
+        //println!("{:#?}", crontab);
 
-    //println!("{:#?}", crontab);
+        fs::write("/etc/crontab", crontab)
+            .expect("failed to write, are you running as root?");
 
-
-
-    fs::write("/etc/crontab", crontab)
-        .expect("failed to write, are you running as root?");
+    }else {};
 }
