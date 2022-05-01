@@ -9,7 +9,7 @@ use std::fs;
 fn main() {
 
     #[derive(Serialize, Deserialize, Debug)]
-    struct cloudflare {
+    struct Cloudflare {
         create_cron: bool,
         cron_time: String,
 
@@ -20,11 +20,11 @@ fn main() {
         api_key: String,
         record_type: char, 
         
-    };
+    }
 
     // user input
 
-    println!("create cron? (true/fals)");
+    println!("create cron? (true/false)");
     let mut cf_create_cron = String::new();
     io::stdin().read_line(&mut cf_create_cron)
         .ok()
@@ -83,7 +83,7 @@ fn main() {
     let cf_record_type = cf_record_type.trim().parse::<char>().unwrap();
 
 
-    let cloudflare_json1 = cloudflare {
+    let cloudflare_json1 = Cloudflare {
 
         create_cron:  cf_create_cron,
         cron_time:  cf_cron_time,
@@ -97,21 +97,33 @@ fn main() {
     
     };
 
-    println!("{:#?}", cloudflare_json1);
+    //println!("{:#?}", cloudflare_json1);
 
     let cf_json = serde_json::to_string_pretty(&cloudflare_json1).unwrap();
-    println!("{:#?}", cf_json);
+    //println!("{:#?}", cf_json);
 
 
-    let jsoncreate = Command::new("touch")
+    let _jsoncreate = Command::new("touch")
         .arg("conf.json")
         .spawn()
         .expect("NO WIMDOES ONLY GNU/LINUX");
 
-
-
-
     fs::write("conf.json", cf_json)
         .expect("Unable to write file");
 
+    let crontab = fs::read_to_string("/etc/crontab")
+        .expect("failed to read file");
+    //println!("{}", crontab);
+
+
+ 
+    
+    let crontab = crontab + &cloudflare_json1.cron_time + "    root   /home/cloudflare_api/api";
+
+    //println!("{:#?}", crontab);
+
+
+
+    fs::write("/etc/crontab", crontab)
+        .expect("failed to write, are you running as root?");
 }
