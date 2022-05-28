@@ -1,9 +1,3 @@
-# Cloudflare DDNS Client
+this project has been been abandoned
 
-### Building
-```
-$ cargo build
-
-$ sh startscript.sh
-
-```
+goto https://github.com/LINKIWI/cloudflare-ddns-client for a cloudflare update client (not associated with this project)
