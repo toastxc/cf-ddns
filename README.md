@@ -4,5 +4,6 @@
 ```
 $ cargo build
 
-$ cargo run
+$ sh startscript.sh
+
 ```
