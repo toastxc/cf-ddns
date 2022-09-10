@@ -21,6 +21,7 @@ cd ~/Downloads/
 git clone rust-cloudflare-ddns.git
 cd rust-cloudflare-ddns
 vim src/main.rs
+cargo run
 ```
 input your cloudflare details and exit (:wq!)
 
