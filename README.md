@@ -17,7 +17,6 @@ A program for automatically updating cloudflare domain names with a dynmaic IP a
 
 ```
 
-cd ~/Downloads/
 git clone rust-cloudflare-ddns.git
 cd rust-cloudflare-ddns
 vim src/main.rs
