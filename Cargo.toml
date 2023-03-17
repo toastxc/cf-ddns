@@ -1,5 +1,5 @@
 [package]
-name = "rust-cloudflare-ddns"
+name = "cf-ddns"
 version = "0.1.0"
 edition = "2021"
 
