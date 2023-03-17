@@ -41,19 +41,34 @@ impl IpTable {
 
 #[tokio::main]
 async fn main() {
+    let mut dir = String::new();
+
+    for x in std::env::args() {
+        let temp: Vec<&str> = x.split('=').collect();
+
+        if temp.contains(&"dir") {
+            dir = format!("{}/", temp[1].to_string());
+        };
+    }
+
+    let iptable = format!("{dir}iptable.toml");
+    let domain_conf = format!("{dir}domains.toml");
+
+
+    println!("{iptable}");
+
     // if myip can be polled
     if let Ok(newip) = Http::set_ip("http://myip.wtf/text").get().await {
         // if conf file doesnt exist, fix
-        if std::fs::read("iptable.toml").is_err() {
+        if std::fs::read(&iptable).is_err() {
             let newconf = IpTable::default().set_old(&newip);
             let se_conf = toml::to_string_pretty(&newconf).unwrap();
-            std::fs::write("iptable.toml", se_conf).unwrap();
+            std::fs::write(&iptable, se_conf).unwrap();
         };
 
         // import and modify old conf file
         let mut conf: IpTable =
-            toml::from_str(&String::from_utf8(std::fs::read("iptable.toml").unwrap()).unwrap())
-                .unwrap();
+            toml::from_str(&String::from_utf8(std::fs::read(&iptable).unwrap()).unwrap()).unwrap();
 
         conf = conf.set_new(&newip);
 
@@ -81,11 +96,11 @@ async fn main() {
 
             conf.zones = domains;
 
-            std::fs::write("iptable.toml", toml::to_string_pretty(&conf).unwrap()).unwrap();
+            std::fs::write(&iptable, toml::to_string_pretty(&conf).unwrap()).unwrap();
         };
 
         let conf = toml::from_str::<IpTable>(
-            &String::from_utf8(std::fs::read("iptable.toml").unwrap()).unwrap(),
+            &String::from_utf8(std::fs::read(&iptable).unwrap()).unwrap(),
         )
         .unwrap();
 
@@ -103,8 +118,12 @@ async fn main() {
             domain_str += &format!("\n\n{}", toml::to_string_pretty(&domains).unwrap());
         }
 
+        std::fs::write(&domain_conf, domain_str).unwrap();
+
+        // file check
+
         let domains = toml::from_str::<DomainHolder>(
-            &String::from_utf8(std::fs::read("domains.toml").unwrap()).unwrap(),
+            &String::from_utf8(std::fs::read(domain_conf).unwrap()).unwrap(),
         );
         for x in domains.unwrap().domains {
             if x.r#type == "A" {
@@ -117,7 +136,7 @@ async fn main() {
 
         newconf.oldip = newconf.current.clone();
 
-        std::fs::write("iptable.toml", toml::to_string_pretty(&newconf).unwrap()).unwrap();
+        std::fs::write(&iptable, toml::to_string_pretty(&newconf).unwrap()).unwrap();
 
         return;
     };
