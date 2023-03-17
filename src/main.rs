@@ -1,172 +1,225 @@
-use std::process::Command;
-use core::str::from_utf8;
-extern crate ajson;
-use std::{thread, time};
-fn main() {
+pub mod cf {
+    pub mod dns {
+        pub mod get;
+        pub mod push;
+    }
 
+    pub mod zone {
+        pub mod get;
+    }
+}
+pub mod http;
 
+use cf::dns::get::DnsGet;
+use serde::{Deserialize, Serialize};
 
-    let zone = "".to_string();
-    let email = "".to_string();
-    let token = "".to_string();
+use crate::{cf::zone::get::ZoneGet, http::Http};
 
-
-    let (cf_ipX, dn_list, name_list) = cf_ip(zone.clone(), email.clone(), token.clone());
-    let my_ipX = my_ip();
-
-        if cf_ipX == "failed".to_string() {
-
-        println!("failed to curl API, check that the credentials given are correct");
-        return
-
-    }else if cf_ipX == my_ipX {
-
-        println!("no ip change");
-
-    }else {
-
-        println!("ip has changed from {} to {}\nrectifying...", my_ipX, cf_ipX);
-        cf_update(zone.clone(), email.clone(), token.clone(), my_ipX, dn_list, name_list);
-        
-    };
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct IpTable {
+    pub oldip: String,
+    pub current: String,
+    pub auth: Auth,
+    pub zones: Vec<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Auth {
+    email: String,
+    token: String,
 }
 
+impl IpTable {
+    pub fn set_old(&mut self, ip: &str) -> Self {
+        self.oldip = String::from(ip);
+        self.to_owned()
+    }
+    pub fn set_new(&mut self, ip: &str) -> Self {
+        self.current = String::from(ip);
+        self.to_owned()
+    }
+}
 
-fn cf_update(zone: String, email: String, token: String, ip: String, dn_list: Vec<String>, name_id: Vec<String>) {
-
-    let sec = time::Duration::from_secs(1);
-    let email_in = "X-Auth-Email: ".to_owned() + &email;
-    let token_in = "X-Auth-Key: ".to_owned() + &token;
-    
-
-
-
-            // finsih
-    for x in 0..dn_list.len() {
-
-        thread::sleep(sec);
-
-    let zone_id = "https://api.cloudflare.com/client/v4/zones/".to_owned() + &zone + "/dns_records/" + &dn_list[x];
-   
-    let json = r#"
-{
-"type":"A","name":""#.to_owned() + &name_id[x] + r#"","content":""# + &ip + r#""
-}"#;
-
-     println!("json parse{}", json);
-
-
-    
-
-    
-     let curl = Command::new("curl")
-        .args([
-              &zone_id,
-              "-H", &email_in,
-              "-H", &token_in,
-              "-H", "Content-Type: application/json", "-s",
-              "-X", "PUT",
-              "--data",
-              &json])
-    .output().expect("failed to curl Cloudflare's API");
-
-    let curl_out = from_utf8(&curl.stdout).unwrap();
-
-
-    //println!("\n\n\n\n\n\nres\n{:?}", curl_out);
-
+#[tokio::main]
+async fn main() {
+    // if myip can be polled
+    if let Ok(newip) = Http::set_ip("http://myip.wtf/text").get().await {
+        // if conf file doesnt exist, fix
+        if std::fs::read("iptable.toml").is_err() {
+            let newconf = IpTable::default().set_old(&newip);
+            let se_conf = toml::to_string_pretty(&newconf).unwrap();
+            std::fs::write("iptable.toml", se_conf).unwrap();
         };
 
+        // import and modify old conf file
+        let mut conf: IpTable =
+            toml::from_str(&String::from_utf8(std::fs::read("iptable.toml").unwrap()).unwrap())
+                .unwrap();
 
-}
+        conf = conf.set_new(&newip);
 
+        if conf.zones.is_empty() {
+            // update zones
+            let res = reqwest::Client::new()
+                .get("https://api.cloudflare.com/client/v4/zones")
+                .header("Content-Type", "application/json")
+                .header("Authorization", format!("Bearer {}", conf.auth.token))
+                .send()
+                .await
+                .unwrap()
+                .error_for_status();
 
+            let mut domains: Vec<String> = Vec::new();
 
+            // if success populate domain list
+            if let Ok(response) = res {
+                let value = response.json::<ZoneGet>().await.unwrap();
 
-fn cf_ip(zone: String, email: String, token: String) -> (String, Vec<String>, Vec<String>) {
+                for x in value.result {
+                    domains.push(x.id);
+                }
+            };
 
-    let zone_in = "https://api.cloudflare.com/client/v4/zones/".to_owned() + &zone + "/dns_records?";
-    let email_in = "X-Auth-Email: ".to_owned() + &email;
-    let token_in = "X-Auth-Key: ".to_owned() + &token;
+            conf.zones = domains;
 
-
-    let curl = Command::new("curl")
-        .args([
-              &zone_in,
-              "-H", &email_in,
-              "-H", &token_in,
-              "-H", "Content-Type: application/json",
-              "-s"
-        ]).output().expect("failed to curl Cloudflare's API");
-
-
-   
-    let curl_out = from_utf8(&curl.stdout).unwrap();
-
-
-    //println!("{:?}", curl_out);
-
-
-    let mut name_num = ajson::get(curl_out, "result.#").unwrap().to_string().parse::<i32>().unwrap();
-
-    let mut domain_names: Vec<String> = vec![];
-    
-    let mut x = 0;
-    for _x in 0..name_num {
-
-        domain_names.push("<placeholder>".to_string());
-
-
-        let resulter = "result.".to_owned() + &x.to_string();
-
-        domain_names[x] = ajson::get(curl_out, &resulter).unwrap().to_string();
-
-
-        x = x + 1;
-
-        
-    };
-
-    let mut newvec: Vec<String> = vec![];
-    let mut newvec2: Vec<String> = vec![];
-
-
-    let mut x = 0;
-
-    for _x in 0..domain_names.len() {
-
-        
-        let resulter = "content".to_owned() + &x.to_string();
-
-        //println!("{}", ajson::get(&domain_names[_x], "type").unwrap().to_string());
-        
-        if ajson::get(&domain_names[_x], "type").unwrap().to_string() == "A" {
-            newvec.push("<placeholder>".to_string());
-            newvec2.push("<placeholder>".to_string());
-            newvec[_x] = ajson::get(&domain_names[_x], "id").unwrap().to_string();
-            newvec2[_x] = ajson::get(&domain_names[_x], "name").unwrap().to_string();
+            std::fs::write("iptable.toml", toml::to_string_pretty(&conf).unwrap()).unwrap();
         };
+
+        let conf = toml::from_str::<IpTable>(
+            &String::from_utf8(std::fs::read("iptable.toml").unwrap()).unwrap(),
+        )
+        .unwrap();
+
+        if conf.oldip == conf.current {
+            println!("no change");
+            return;
+        };
+
+        // define domains
+        let mut domain_str = String::new();
+
+        for x in conf.zones.clone() {
+            let domains = domains(&conf.auth, &x).await;
+
+            domain_str += &format!("\n\n{}", toml::to_string_pretty(&domains).unwrap());
+        }
+
+        let domains = toml::from_str::<DomainHolder>(
+            &String::from_utf8(std::fs::read("domains.toml").unwrap()).unwrap(),
+        );
+        for x in domains.unwrap().domains {
+            if x.r#type == "A" {
+                println!("updating {} for zone {}", x.name, x.zone);
+                domain_update(&x, &conf).await;
+            };
+        }
+
+        let mut newconf = conf;
+
+        newconf.oldip = newconf.current.clone();
+
+        std::fs::write("iptable.toml", toml::to_string_pretty(&newconf).unwrap()).unwrap();
+
+        return;
     };
-
-    println!("{:?}", newvec);
-    //println!("{:?}", newvec2);
-
-    let ip = ajson::get(curl_out, "result.0.content").unwrap().to_string();
-    let dns = newvec;
-
-    return (ip, dns, newvec2)
-
+    println!("Could not reach myip, service unavailable");
 }
 
+async fn domain_update(domain: &Domain, conf: &IpTable) {
+    // update records
 
-fn my_ip() -> String {
+    #[derive(Debug, Serialize, Deserialize)]
+    struct IpUpdate {
+        content: String,
+        #[serde(rename = "type")]
+        r#type: String,
+        name: String,
+        proxied: bool,
+        comment: String,
+        ttl: i64,
+    }
 
-    let curl_com = Command::new("curl")
-        .arg("https://api.myip.com/")
-        .output()
-        .expect("failed to exec");
+    let data = IpUpdate {
+        content: conf.current.clone(),
+        r#type: domain.r#type.clone(),
+        name: domain.name.clone(),
+        proxied: domain.proxied,
+        comment: domain.comment.clone(),
+        ttl: domain.ttl,
+    };
 
-    let curl = from_utf8(&curl_com.stdout).unwrap().to_string();
-    return ajson::get(&curl, "ip").unwrap().to_string();
+    let res = reqwest::Client::new()
+        .put(format!(
+            "https://api.cloudflare.com/client/v4/zones/{}/dns_records/{}",
+            domain.zone, domain.id
+        ))
+        //.headers(headermap)
+        .header("Authorization", format!("Bearer {}", &conf.auth.token))
+        .header("X-Auth-Email", &conf.auth.email)
+        .body(serde_json::to_string(&data).unwrap())
+        .send()
+        .await
+        .unwrap()
+        .status();
 
+    if res.is_success() {
+        println!("success");
+    } else {
+        println!("{}", res.to_string());
+    };
+}
+
+async fn domains(auth: &Auth, zone: &str) -> DomainHolder {
+    let mut domains = Vec::new();
+    let get = reqwest::Client::new()
+        .get(format!(
+            "https://api.cloudflare.com/client/v4/zones/{zone}/dns_records"
+        ))
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {}", &auth.token))
+        .send()
+        .await
+        .unwrap()
+        .error_for_status();
+
+    if let Ok(response) = get {
+        let dns = response.json::<DnsGet>().await;
+
+        let dns = match dns {
+            Ok(a) => a,
+            Err(e) => {
+                println!("{e}");
+                panic!()
+            }
+        };
+
+        for x in dns.result {
+            domains.push(Domain {
+                id: x.id,
+                name: x.name,
+                r#type: x.type_field,
+                zone: zone.to_owned(),
+
+                comment: x.comment.unwrap_or(String::from("No comment")),
+                ttl: x.ttl,
+                proxied: x.proxied,
+            });
+        }
+    }
+    DomainHolder { domains }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DomainHolder {
+    domains: Vec<Domain>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Domain {
+    id: String,
+    name: String,
+    r#type: String,
+    zone: String,
+    comment: String,
+    ttl: i64,
+    proxied: bool,
 }
