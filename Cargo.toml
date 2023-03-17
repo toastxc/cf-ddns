@@ -6,10 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde_json = "1.0.82"
-ajson = "0.1"
-confy = "0.4.0"
+serde_json = "1.0.94"
 serde = { version = "1.0.136", features = ["derive"] }
-reqwest = { version = "0.11", features = ["json", "blocking"] }
+reqwest = { version = "0.11", features = ["json", "blocking", "native-tls"] }
 tokio = { version = "1", features = ["full"] }
-time = "0.3.13"
+toml = "0.7.2"
+native-tls = "0.2.11"
