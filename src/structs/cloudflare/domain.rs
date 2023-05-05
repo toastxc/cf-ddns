@@ -13,6 +13,7 @@ pub struct DataDomain {
     pub modified_on: String,
     pub name: String,
     pub proxiable: bool,
+    pub proxied: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Vec<Value>>,
     pub ttl: u32,

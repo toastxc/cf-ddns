@@ -21,4 +21,5 @@ pub struct Auth {
 pub struct IpTable {
     pub ip: String,
     pub zones: Vec<String>,
+    pub blacklist: Vec<String>,
 }
