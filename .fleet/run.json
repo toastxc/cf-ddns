@@ -1,25 +1,32 @@
 {
     "configurations": [
-
         {
             "type": "cargo",
             "name": "run",
-            "cargoArgs": ["run"],
+            "cargoArgs": [
+                "run"
+            ]
         },
-
         {
             "type": "cargo",
             "name": "clippy",
-            "cargoArgs": ["clippy"],
+            "cargoArgs": [
+                "clippy"
+            ]
         },
-
-
         {
             "type": "cargo",
             "name": "fmt",
-            "cargoArgs": ["fmt"],
+            "cargoArgs": [
+                "fmt"
+            ]
         },
-        
-
+        {
+            "type": "cargo",
+            "name": "build",
+            "cargoArgs": [
+                "b"
+            ]
+        }
     ]
 }
