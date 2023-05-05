@@ -5,6 +5,7 @@ use cf_ddns::{
     structs::{
         cloudflare::{domain::DataDomain, result::ResultDomainVec},
         ip::{Auth, IpTable},
+        mutex::Mutex,
     },
 };
 use tokio::task;
@@ -22,7 +23,6 @@ async fn main() {
 
     println!("[INFO] conf path {dpath}");
 
-    // define client
     println!("[INFO] importing config");
     let conf_raw = match std::fs::read(&dpath) {
         Ok(bytes) => String::from_utf8(bytes).unwrap(),
@@ -35,44 +35,64 @@ async fn main() {
     let mut conf: IpTable = toml::from_str(&conf_raw).unwrap();
     let auth: Auth = toml::from_str(&conf_raw).unwrap();
 
+    // created mutex from file
+    // if locked this will panic
+    let mut mutex = match Mutex::new("mutex.lock") {
+        Ok(mut mutex) => match mutex.lock() {
+            Err(mutex_lock_er) => {
+                println!("[EXIT] {:#?}", mutex_lock_er);
+                return;
+            }
+            Ok(mutex) => mutex,
+        },
+        Err(error) => {
+            println!("[EXIT] {}", error);
+            return;
+        }
+    };
+
     let client = Delta::new("https://api.cloudflare.com/client/v4/zones/", 10)
         .add_header("Authorization", &format!("Bearer {}", &auth.token))
         .add_header("X-Auth-Email", &auth.email);
 
-    //todo check ip change
     println!("[INFO] polling current address");
     if let Ok(ip) = ip::myip(client.clone()).await {
         let current_ip = ip.ip;
         if conf.ip == current_ip {
             println!("[EXIT] no ip change");
+            mutex.open().unwrap();
             return;
         } else {
             println!("[MOD] updating address");
             conf.ip = current_ip;
         }
 
-        // todo add zones
         if let Ok(zones) = zone_get::zone_get(&client).await {
             for x in zones.result {
-                println!("[MOD] new zone found");
                 if !conf.zones.contains(&x.id) {
+                    println!("[MOD] new zone added");
                     conf.zones.push(x.id);
                 }
             }
         };
-
-        // todo update domain
         for zone in conf.zones.clone() {
-            //todo get domains
-
             if let Ok(ResultDomainVec {
                 result: Some(domains),
                 ..
             }) = domain_fetch::domain_fetch(&client, &zone).await
             {
                 for mut domain in domains {
-                    if domain.r#type == "A" {
+                    if domain.r#type == "A" && !conf.blacklist.contains(&domain.name) {
+                        if domain.content == conf.ip.clone() {
+                            println!(
+                                "[INFO] content of {} is already correct, skipping",
+                                domain.name
+                            );
+                            continue;
+                        };
+
                         domain.content = conf.ip.clone();
+
                         let _ =
                             task::spawn(update_domain_status(client.clone(), domain.clone())).await;
                     }
@@ -82,6 +102,9 @@ async fn main() {
 
         let mut buffer = toml::to_string(&conf).unwrap();
         buffer += &toml::to_string(&auth).unwrap();
+
+        println!("[INFO] procceses complete, unlocking mutex");
+        mutex.open().unwrap();
 
         println!("[EXIT] sucessfully updated, goodbye");
         std::fs::write(&dpath, buffer).unwrap();
