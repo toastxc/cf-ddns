@@ -35,9 +35,9 @@ async fn main() {
     let mut conf: IpTable = toml::from_str(&conf_raw).unwrap();
     let auth: Auth = toml::from_str(&conf_raw).unwrap();
 
-    // created mutex from file
-    // if locked this will panic
-    let mut mutex = match Mutex::new("mutex.lock") {
+    let mut mutex = Mutex::new().set_timeout(10).set_path(".mutex.lock");
+
+    match mutex.gen().await {
         Ok(mut mutex) => match mutex.lock() {
             Err(mutex_lock_er) => {
                 println!("[EXIT] {:#?}", mutex_lock_er);
